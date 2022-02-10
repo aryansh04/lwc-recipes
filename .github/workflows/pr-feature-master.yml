@@ -21,18 +21,18 @@ jobs:
       - name: 'Checkout source code'
         uses: actions/checkout@v2
 
-      # Install PMD
-      - name: 'Install PMD'
-        run: |
-            PMD_VERSION=`cat pmd/pmd-version.txt`
-            wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F$PMD_VERSION/pmd-bin-$PMD_VERSION.zip
-            unzip pmd-bin-$PMD_VERSION.zip -d ~
-            mv ~/pmd-bin-$PMD_VERSION ~/pmd
-            ~/pmd/bin/run.sh pmd --version
+      # # Install PMD
+      # - name: 'Install PMD'
+      #   run: |
+      #       PMD_VERSION=`cat pmd/pmd-version.txt`
+      #       wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F$PMD_VERSION/pmd-bin-$PMD_VERSION.zip
+      #       unzip pmd-bin-$PMD_VERSION.zip -d ~
+      #       mv ~/pmd-bin-$PMD_VERSION ~/pmd
+      #       ~/pmd/bin/run.sh pmd --version
 
-      # Run PMD scan
-      - name: 'Run PMD scan'
-        run: ~/pmd/bin/run.sh pmd -d force-app -R pmd/ruleset.xml -f text
+      # # Run PMD scan
+      # - name: 'Run PMD scan'
+      #   run: ~/pmd/bin/run.sh pmd -d force-app -R pmd/ruleset.xml -f text
 
        # Install Salesforce CLI
       - name: 'Install Salesforce CLI'
@@ -46,10 +46,35 @@ jobs:
       # Authenticate with Dev-Hub
       - name: 'Authenticate with Dev-hub'
         run: sfdx force:auth:jwt:grant --clientid ${{secrets.CONSUMER_KEY}} --jwtkeyfile assets/server.key --username ${{secrets.USERNAME}} --setalias mydevhubTP --setdefaultdevhubusername
-        
+
+      # Create allow list to install unsigned plugins
+      - name: 'Create allow list'
+        run:  |
+          cd $HOME/.config
+          mkdir sfdx
+          cd sfdx
+          sudo echo '[
+                    "sfdx-git-delta"
+                ]' > unsignedPluginAllowList.json
+
+      # Install the 'sfdx-git-delta' plugin and Create Delta
+      - name: 'Install plugin and Create Delta'
+        run : |
+            sfdx plugins:install sfdx-git-delta
+            git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+            git fetch --all
+            git checkout -b feature-pr
+            git --no-pager diff --name-status feature-pr origin/master
+            sfdx sgd:source:delta --to feature-pr --from origin/master --ignore .diffignore --repo . --output "."
+            cat package/package.xml
+
       # Validate
       - name: 'Validate Metadata'
-        run: sfdx force:source:deploy -p force-app/main/default --testlevel=RunLocalTests --checkonly -u mydevhubTP
+        run: sfdx force:source:deploy --manifest package/package.xml --testlevel=RunLocalTests --checkonly -u mydevhubTP -w 30 -o
+
+          
+
+
 
   #     # Create scratch org
   #     - name: 'Create scratch org'
