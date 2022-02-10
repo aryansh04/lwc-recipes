@@ -1,3 +1,4 @@
+/*Comments added*/
 public with sharing class AccountController {
     /* Aure accessible method */
     @AuraEnabled(cacheable=true)
